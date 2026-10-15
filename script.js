@@ -1,6 +1,7 @@
-// UPDATED: client-side script to call Cloudflare Worker proxy
+// Client-side script: calls your Cloudflare Worker (https://hf-proxy.gikunju.workers.dev)
+// Note: the Hugging Face API key must remain on the Worker (server-side).
 
-// REGISTER SERVICE WORKER
+// REGISTER SERVICE WORKER (keeps saved coin selection behavior)
 if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js')
         .then(reg => console.log('Service Worker Registered'))
@@ -16,7 +17,7 @@ if ('serviceWorker' in navigator) {
     });
 }
 
-// 1. EXTENSIBLE COIN DATABASE
+// -------------------- Content Data --------------------
 const cryptoDatabase = {
     "Bitcoin (BTC)": "Bitcoin's golden '₿' coin asset symbol",
     "Ethereum (ETH)": "Ethereum's crystalline, diamond-shaped geometric octahedron asset logo",
@@ -25,7 +26,6 @@ const cryptoDatabase = {
     "Solana (SOL)": "Solana's vibrant green, cyan, and purple stacked gradient geometric bar logo"
 };
 
-// 2. INFINITE COMBINATORIAL ENGINE LOGIC
 const coreMetaphors = [
     "A massive, unstoppable rocket ship powered directly by the coin logo blasting off smoothly from a cracked launchpad labeled 'Fiat System', leaving stunned onlookers behind.",
     "A sturdy, impenetrable superhero shield bearing the coin emblem effortlessly deflecting a heavy barrage of glowing arrows labeled 'Inflation' and 'Market Debt'.",
@@ -50,8 +50,7 @@ const artisticFlairs = [
     "The aesthetic delivers an eye-catching look through highly structured single-panel editorial cartoon design elements."
 ];
 
-// INITIALIZE USER INTERFACE ELEMENTS
-const hfKeyInput = document.getElementById('hfKey'); // still used to save locally, but not sent to HF from client
+// -------------------- UI Elements --------------------
 const coinSelect = document.getElementById('coinSelect');
 const generateBtn = document.getElementById('generateBtn');
 const promptOutput = document.getElementById('promptOutput');
@@ -62,41 +61,41 @@ const placeholderText = document.getElementById('placeholderText');
 const generatedImage = document.getElementById('generatedImage');
 const errorDisplay = document.getElementById('errorDisplay');
 
-// Replace this with your deployed Cloudflare Worker URL:
-const WORKER_URL = 'https://hf-proxy.gikunju.workers.dev/';
+// Replace with your deployed Cloudflare Worker URL (root POST works)
+const WORKER_URL = 'https://hf-proxy.gikunju.workers.dev';
 
-// Populate Dropdown
+// Populate dropdown
 Object.keys(cryptoDatabase).forEach(coin => {
-    let option = document.createElement('option');
+    const option = document.createElement('option');
     option.value = coin;
     option.textContent = coin;
     coinSelect.appendChild(option);
 });
 
-// Load saved selections from LocalStorage
-if(localStorage.getItem('selectedCoin')) { coinSelect.value = localStorage.getItem('selectedCoin'); }
-if(localStorage.getItem('hfApiKey')) { hfKeyInput.value = localStorage.getItem('hfApiKey'); }
+// Load saved selection if present
+if (localStorage.getItem('selectedCoin')) {
+    coinSelect.value = localStorage.getItem('selectedCoin');
+}
 
-// Track UI changes for Service Worker & local states
+// Save selection
 coinSelect.addEventListener('change', () => {
     localStorage.setItem('selectedCoin', coinSelect.value);
     if (navigator.serviceWorker.controller) {
         navigator.serviceWorker.controller.postMessage({ type: 'SAVE_SELECTION', coin: coinSelect.value });
     }
 });
-hfKeyInput.addEventListener('input', () => { localStorage.setItem('hfApiKey', hfKeyInput.value); });
 
-// PROMPT GENERATOR RUNNER
+// -------------------- Prompt generation --------------------
 function generatePrompt() {
-    const selectedCoin = coinSelect.value;
-    const logoDesc = cryptoDatabase[selectedCoin];
-    
+    const selectedCoin = coinSelect.value || Object.keys(cryptoDatabase)[0];
+    const logoDesc = cryptoDatabase[selectedCoin] || '';
+
     const metaphor = coreMetaphors[Math.floor(Math.random() * coreMetaphors.length)];
     const context = contextSettings[Math.floor(Math.random() * contextSettings.length)];
     const flair = artisticFlairs[Math.floor(Math.random() * artisticFlairs.length)];
-    
+
     const fullPrompt = `A dynamic editorial cartoon in a clean landscape layout centered around a ${selectedCoin} theme. The artwork visibly showcases ${logoDesc}. ${metaphor} ${context} ${flair} In the upper corner, the handwritten artist signature reads "blog.god on STEEM". Simple, clean composition, highly creative and eye-catching.`;
-    
+
     promptOutput.textContent = fullPrompt;
     promptOutput.style.display = 'block';
     copyBtn.style.display = 'block';
@@ -106,22 +105,22 @@ function generatePrompt() {
 
 generateBtn.addEventListener('click', generatePrompt);
 
-// COPY TEXT FEATURE
+// Copy prompt
 copyBtn.addEventListener('click', () => {
-    navigator.clipboard.writeText(promptOutput.textContent);
-    alert('Prompt copied successfully!');
+    navigator.clipboard.writeText(promptOutput.textContent)
+        .then(() => alert('Prompt copied successfully!'))
+        .catch(() => alert('Copy failed'));
 });
 
-// FREE LIVE IMAGE GENERATION PIPELINE (via Cloudflare Worker proxy)
+// -------------------- Image generation (via Worker) --------------------
 async function generateAIImage() {
-    const promptText = promptOutput.textContent;
-
-    if (!promptText || !promptText.trim()) {
-        showError("Please generate a prompt first!");
+    const promptText = promptOutput.textContent && promptOutput.textContent.trim();
+    if (!promptText) {
+        showError('Please generate a prompt first!');
         return;
     }
 
-    // Reset layout UI states for generation step
+    // UI state
     errorDisplay.style.display = 'none';
     placeholderText.style.display = 'none';
     generatedImage.style.display = 'none';
@@ -129,32 +128,36 @@ async function generateAIImage() {
     generateImgBtn.disabled = true;
 
     try {
-        // Send prompt to your Cloudflare Worker which holds the HF key securely
-        const response = await fetch(WORKER_URL, {
+        const resp = await fetch(WORKER_URL, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ prompt: promptText })
         });
 
-        if (!response.ok) {
-            // try to decode JSON error returned by worker
-            const errData = await response.json().catch(() => ({}));
-            throw new Error(errData.error || `Server responded with status: ${response.status}`);
+        if (!resp.ok) {
+            // Try to parse JSON error from worker (common)
+            const errJson = await resp.json().catch(() => null);
+            const errMsg = errJson && (errJson.error || JSON.stringify(errJson)) || `Server responded with status ${resp.status}`;
+            throw new Error(errMsg);
         }
 
-        // Expect binary image back (worker forwards HF response)
-        const blob = await response.blob();
+        // Determine response type: image binary or JSON
+        const contentType = resp.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+            const json = await resp.json().catch(() => null);
+            const errMsg = json && (json.error || JSON.stringify(json)) || 'Unknown JSON response';
+            throw new Error(errMsg);
+        }
+
+        // Assume binary image
+        const blob = await resp.blob();
         const objectURL = URL.createObjectURL(blob);
-        
-        // Render generated image onto canvas panel
         generatedImage.src = objectURL;
         generatedImage.style.display = 'block';
         placeholderText.style.display = 'none';
-    } catch (error) {
-        console.error(error);
-        showError(`Generation Failed: ${error.message}`);
+    } catch (err) {
+        console.error('Generate error:', err);
+        showError(`Generation Failed: ${err.message}`);
         placeholderText.style.display = 'block';
     } finally {
         loadingSpinner.style.display = 'none';
