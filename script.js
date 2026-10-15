@@ -1,7 +1,9 @@
 // Client-side script: calls your Cloudflare Worker (https://hf-proxy.gikunju.workers.dev)
-// Note: the Hugging Face API key must remain on the Worker (server-side).
+// This version focuses generation on comic/editorial cartoon prompts (single-panel, landscape, minimal, punchline-driven)
+// - Preserves UI and image-generation worker integration
+// - Produces varied, non-repetitive comic/cartoon prompts
+// - Enforces artist credit "blog.god on STEEM" and landscape layout when requested
 
-// REGISTER SERVICE WORKER (keeps saved coin selection behavior)
 if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js')
         .then(reg => console.log('Service Worker Registered'))
@@ -17,7 +19,7 @@ if ('serviceWorker' in navigator) {
     });
 }
 
-// -------------------- Content Data --------------------
+// -------------------- Content Data (comic/cartoon focused) --------------------
 const cryptoDatabase = {
     "Bitcoin (BTC)": "Bitcoin's golden '₿' coin asset symbol",
     "Ethereum (ETH)": "Ethereum's crystalline, diamond-shaped geometric octahedron asset logo",
@@ -26,29 +28,138 @@ const cryptoDatabase = {
     "Solana (SOL)": "Solana's vibrant green, cyan, and purple stacked gradient geometric bar logo"
 };
 
-const coreMetaphors = [
-    "A massive, unstoppable rocket ship powered directly by the coin logo blasting off smoothly from a cracked launchpad labeled 'Fiat System', leaving stunned onlookers behind.",
-    "A sturdy, impenetrable superhero shield bearing the coin emblem effortlessly deflecting a heavy barrage of glowing arrows labeled 'Inflation' and 'Market Debt'.",
-    "A sleek, futuristic hypercar branded with the coin asset logo crossing a finish line gracefully, leaving broken-down rusty cars labeled 'Bear Market' in a cloud of dust.",
-    "A giant golden playground balance scale where the coin logo completely outweighs and lifts a massive, heavy iron anchor labeled 'Economic Volatility' high into the sky.",
-    "A lush, glowing tropical island oasis beautifully shaped exactly like the coin logo, flourishing vibrantly in the middle of a dry, cracked desert landscape labeled 'Uncertainty'."
+// Pools tuned to produce single-panel editorial cartoon prompts
+const punchlineSubjects = [
+    "a coin as heroic protagonist",
+    "the coin as an everyday object with a twist",
+    "a coin confronting a bureaucratic symbol",
+    "a coin and a tiny weary human trader",
+    "a coin as a petty villain turned comic hero",
+    "the coin oversized in an ordinary scene",
+    "a coin turning a mundane device into a spectacle",
+    "a coin perched on a comically small pedestal",
+    "a coin riding a broken-down market cart",
+    "a coin as a whimsical island centerpiece"
 ];
 
-const contextSettings = [
-    "The composition uses creative situational irony to visually deliver a sharp economic punchline.",
-    "The scene uses a high-contrast minimalist background layout, drawing your eye straight to the relationship between the characters.",
-    "The layout uses clever proportional balance, putting full visual focus directly onto the core message.",
-    "The single-panel dynamic composition emphasizes dramatic contrast between stability and chaos.",
-    "The visual arrangement relies on punchy situational setups to make the financial commentary immediately obvious."
+// Visual and style fragments that map to the original app's comic/cartoon brief
+const lineWork = [
+    "expressive slightly-loose ink outlines",
+    "clean confident ink outlines with minimal cross-hatching",
+    "bold contour lines with restrained cross-hatching for shadowing",
+    "energetic sketchy ink lines kept readable"
 ];
 
-const artisticFlairs = [
-    "The art style features clean, bold comic ink outlines paired with vibrant, simple flat digital coloring.",
-    "The design utilizes expressive, high-impact minimalist marker styling with solid high-contrast tones.",
-    "The characters are highly expressive with comedic, exaggerated proportions and playful features.",
-    "The cartoon figures boast distinct blocky shapes and funny, disproportionate comic anatomy.",
-    "The aesthetic delivers an eye-catching look through highly structured single-panel editorial cartoon design elements."
+const characterDesign = [
+    "exaggerated comedic features: oversized noses, blocky shapes, disproportionate limbs",
+    "simplified caricatured characters with clear silhouettes",
+    "playful cartoon anatomy emphasizing emotion and gesture",
+    "stylized figures with small legs and large upper bodies for humor"
 ];
+
+const coloration = [
+    "flat high-contrast marker/digital colors, minimal shading",
+    "limited palette with bold blocks of color, little texture",
+    "solid color fields and spot-color highlights to focus the punchline",
+    "simple two- or three-color scheme for immediate readability"
+];
+
+const composition = [
+    "single-panel landscape layout, minimalist background",
+    "single-panel horizontal composition focusing on situational irony",
+    "one-panel editorial cartoon, clear foreground punchline",
+    "single-frame comic strip layout, wide landscape" 
+];
+
+const cameraAndFraming = [
+    "medium shot focusing on characters and action",
+    "wide landscape view that keeps scene simple and readable",
+    "tight framing that centers the logo and interaction",
+    "three-quarter view to show context without clutter"
+];
+
+const arabVibeModifiers = [
+    "Arab vibe: cultural styling cues in clothing and architecture, tasteful and respectful",
+    "Middle Eastern street scene touches: decorative tiles, simple market stalls",
+    "Arab aesthetic accents: keffiyeh-pattern hints, warm desert tones"
+];
+
+const editorialNotes = [
+    "avoid complication; keep the scene simple but catchy",
+    "focus on a single ironic relationship or visual gag",
+    "no verbose captions — rely on visual punchline",
+    "avoid busy backgrounds and excessive detail"
+];
+
+// Words/phrases to avoid literally in generated prompt (user requested)
+const forbiddenPhrases = [
+    "line work:",
+    "character design:",
+    "coloration:",
+    "composition:",
+    "the artist's name",
+    "avoid words"
+];
+
+// Utility / dedupe
+const seenPrompts = new Set();
+function normalizePrompt(text) {
+    return (text || "")
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+}
+
+function randomPick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+// Build a prompt that honors the original comic/cartoon brief and the user's example
+function buildComicPrompt(selectedCoin, logoDesc, options = {}) {
+    // options: { arabVibe: boolean, strictMinimal: boolean }
+    const arab = options.arabVibe ? randomPick(arabVibeModifiers) : '';
+
+    // select fragments ensuring we keep to simple readable language (avoid bullet labels)
+    const subject = randomPick(punchlineSubjects);
+    const lw = randomPick(lineWork);
+    const cd = randomPick(characterDesign);
+    const col = randomPick(coloration);
+    const comp = randomPick(composition);
+    const cam = randomPick(cameraAndFraming);
+    const note = randomPick(editorialNotes);
+
+    // assemble using short clear sentences; ensure artist credit and landscape layout
+    let prompt = `Create a ${comp} in editorial cartoon / single-panel comic style centered on ${selectedCoin} (include the ${selectedCoin.split(' ')[0]} logo visually). Keep it simple, catchy, and easy to read.`;
+
+    prompt += ` Line work: ${lw}. Character design: ${cd}. Colors: ${col}. Framing: ${cam}. ${note}.`;
+
+    if (arab) prompt += ` Cultural vibe: ${arab}.`;
+
+    // Artist credit and layout explicit requirement
+    prompt += ` Use landscape layout. Credit: blog.god on STEEM.`;
+
+    // Post-process: remove any forbidden phrases if they accidentally got included
+    forbiddenPhrases.forEach(fp => {
+        const re = new RegExp(fp, 'ig');
+        prompt = prompt.replace(re, '');
+    });
+
+    // Normalize extra whitespace
+    prompt = prompt.replace(/\s+/g, ' ').trim();
+
+    return prompt;
+}
+
+function generateUniqueComicPrompt(selectedCoin, logoDesc, options = {}) {
+    for (let i = 0; i < 60; i++) {
+        const p = buildComicPrompt(selectedCoin, logoDesc, options);
+        const n = normalizePrompt(p);
+        if (seenPrompts.has(n)) continue;
+        seenPrompts.add(n);
+        return p;
+    }
+    // fallback
+    return `Create a single-panel editorial cartoon in landscape layout centered on ${selectedCoin} (include the ${selectedCoin.split(' ')[0]} logo). Simple, catchy, flat colors, clear ink outlines, and credit to blog.god on STEEM.`;
+}
 
 // -------------------- UI Elements --------------------
 const coinSelect = document.getElementById('coinSelect');
@@ -85,18 +196,17 @@ coinSelect.addEventListener('change', () => {
     }
 });
 
-// -------------------- Prompt generation --------------------
+// -------------------- Prompt generation (UI hook) --------------------
 function generatePrompt() {
     const selectedCoin = coinSelect.value || Object.keys(cryptoDatabase)[0];
     const logoDesc = cryptoDatabase[selectedCoin] || '';
 
-    const metaphor = coreMetaphors[Math.floor(Math.random() * coreMetaphors.length)];
-    const context = contextSettings[Math.floor(Math.random() * contextSettings.length)];
-    const flair = artisticFlairs[Math.floor(Math.random() * artisticFlairs.length)];
+    // default options: keep arab vibe off unless coin is XRP (example)
+    const options = { arabVibe: selectedCoin.startsWith('XRP') };
 
-    const fullPrompt = `A dynamic editorial cartoon in a clean landscape layout centered around a ${selectedCoin} theme. The artwork visibly showcases ${logoDesc}. ${metaphor} ${context} ${flair} In the upper corner, the handwritten artist signature reads "blog.god on STEEM". Simple, clean composition, highly creative and eye-catching.`;
+    const prompt = generateUniqueComicPrompt(selectedCoin, logoDesc, options);
 
-    promptOutput.textContent = fullPrompt;
+    promptOutput.textContent = prompt;
     promptOutput.style.display = 'block';
     copyBtn.style.display = 'block';
     generateImgBtn.style.display = 'block';
@@ -120,7 +230,6 @@ async function generateAIImage() {
         return;
     }
 
-    // UI state
     errorDisplay.style.display = 'none';
     placeholderText.style.display = 'none';
     generatedImage.style.display = 'none';
@@ -135,13 +244,11 @@ async function generateAIImage() {
         });
 
         if (!resp.ok) {
-            // Try to parse JSON error from worker (common)
             const errJson = await resp.json().catch(() => null);
             const errMsg = errJson && (errJson.error || JSON.stringify(errJson)) || `Server responded with status ${resp.status}`;
             throw new Error(errMsg);
         }
 
-        // Determine response type: image binary or JSON
         const contentType = resp.headers.get('content-type') || '';
         if (contentType.includes('application/json')) {
             const json = await resp.json().catch(() => null);
@@ -149,7 +256,6 @@ async function generateAIImage() {
             throw new Error(errMsg);
         }
 
-        // Assume binary image
         const blob = await resp.blob();
         const objectURL = URL.createObjectURL(blob);
         generatedImage.src = objectURL;
