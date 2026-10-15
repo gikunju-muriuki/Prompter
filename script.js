@@ -4,7 +4,6 @@ if ('serviceWorker' in navigator) {
         .then(reg => console.log('Service Worker Registered'))
         .catch(err => console.error('SW Registration Failed', err));
 
-    // Handle state restoration passed back from Service Worker logic
     navigator.serviceWorker.addEventListener('message', (event) => {
         if (event.data && event.data.type === 'RESTORE_SELECTION') {
             const savedCoin = event.data.coin;
@@ -15,7 +14,7 @@ if ('serviceWorker' in navigator) {
     });
 }
 
-// 1. EXTENSIBLE COIN DATABASE (Add, change, or remove coins easily here)
+// 1. EXTENSIBLE COIN DATABASE
 const cryptoDatabase = {
     "Bitcoin (BTC)": "Bitcoin's golden '₿' coin asset symbol",
     "Ethereum (ETH)": "Ethereum's crystalline, diamond-shaped geometric octahedron asset logo",
@@ -24,7 +23,7 @@ const cryptoDatabase = {
     "Solana (SOL)": "Solana's vibrant green, cyan, and purple stacked gradient geometric bar logo"
 };
 
-// 2. INFINITE COMBINATORIAL ENGINE LOGIC (Expand these lists as much as you want!)
+// 2. INFINITE COMBINATORIAL ENGINE LOGIC
 const coreMetaphors = [
     "A massive, unstoppable rocket ship powered directly by the coin logo blasting off smoothly from a cracked launchpad labeled 'Fiat System', leaving stunned onlookers behind.",
     "A sturdy, impenetrable superhero shield bearing the coin emblem effortlessly deflecting a heavy barrage of glowing arrows labeled 'Inflation' and 'Market Debt'.",
@@ -49,11 +48,17 @@ const artisticFlairs = [
     "The aesthetic delivers an eye-catching look through highly structured single-panel editorial cartoon design elements."
 ];
 
-// INITIALIZE USER INTERFACE
+// INITIALIZE USER INTERFACE ELEMENTS
+const hfKeyInput = document.getElementById('hfKey');
 const coinSelect = document.getElementById('coinSelect');
 const generateBtn = document.getElementById('generateBtn');
 const promptOutput = document.getElementById('promptOutput');
 const copyBtn = document.getElementById('copyBtn');
+const generateImgBtn = document.getElementById('generateImgBtn');
+const loadingSpinner = document.getElementById('loadingSpinner');
+const placeholderText = document.getElementById('placeholderText');
+const generatedImage = document.getElementById('generatedImage');
+const errorDisplay = document.getElementById('errorDisplay');
 
 // Populate Dropdown
 Object.keys(cryptoDatabase).forEach(coin => {
@@ -63,42 +68,98 @@ Object.keys(cryptoDatabase).forEach(coin => {
     coinSelect.appendChild(option);
 });
 
-// Load saved selection from LocalStorage directly on load (Instant UI backup)
-if(localStorage.getItem('selectedCoin')) {
-    coinSelect.value = localStorage.getItem('selectedCoin');
-}
+// Load saved selections from LocalStorage
+if(localStorage.getItem('selectedCoin')) { coinSelect.value = localStorage.getItem('selectedCoin'); }
+if(localStorage.getItem('hfApiKey')) { hfKeyInput.value = localStorage.getItem('hfApiKey'); }
 
-// Track changes to send state to service worker
+// Track UI changes for Service Worker & local states
 coinSelect.addEventListener('change', () => {
     localStorage.setItem('selectedCoin', coinSelect.value);
     if (navigator.serviceWorker.controller) {
-        navigator.serviceWorker.controller.postMessage({
-            type: 'SAVE_SELECTION',
-            coin: coinSelect.value
-        });
+        navigator.serviceWorker.controller.postMessage({ type: 'SAVE_SELECTION', coin: coinSelect.value });
     }
 });
+hfKeyInput.addEventListener('input', () => { localStorage.setItem('hfApiKey', hfKeyInput.value); });
 
-// GENERATION LOGIC (Combinatorial Matrix)
+// PROMPT GENERATOR RUNNER
 function generatePrompt() {
     const selectedCoin = coinSelect.value;
     const logoDesc = cryptoDatabase[selectedCoin];
     
-    // Pick entirely random elements across the arrays
     const metaphor = coreMetaphors[Math.floor(Math.random() * coreMetaphors.length)];
     const context = contextSettings[Math.floor(Math.random() * contextSettings.length)];
     const flair = artisticFlairs[Math.floor(Math.random() * artisticFlairs.length)];
     
-    // Construct the Master Prompt
     const fullPrompt = `A dynamic editorial cartoon in a clean landscape layout centered around a ${selectedCoin} theme. The artwork visibly showcases ${logoDesc}. ${metaphor} ${context} ${flair} In the upper corner, the handwritten artist signature reads "blog.god on STEEM". Simple, clean composition, highly creative and eye-catching.`;
     
     promptOutput.textContent = fullPrompt;
+    promptOutput.style.display = 'block';
+    copyBtn.style.display = 'block';
+    generateImgBtn.style.display = 'block';
+    errorDisplay.style.display = 'none';
 }
 
 generateBtn.addEventListener('click', generatePrompt);
 
-// Copy Feature
+// COPY TEXT FEATURE
 copyBtn.addEventListener('click', () => {
     navigator.clipboard.writeText(promptOutput.textContent);
     alert('Prompt copied successfully!');
 });
+
+// FREE LIVE IMAGE GENERATION PIPELINE (Hugging Face API)
+async function generateAIImage() {
+    const token = hfKeyInput.value.trim();
+    const promptText = promptOutput.textContent;
+
+    if (!token) {
+        showError("Please enter your Hugging Face API key first!");
+        return;
+    }
+
+    // Reset layout UI states for generation step
+    errorDisplay.style.display = 'none';
+    placeholderText.style.display = 'none';
+    generatedImage.style.display = 'none';
+    loadingSpinner.style.display = 'block';
+
+    try {
+        // Utilizing Black Forest Labs Flux-Schnell model (Blazing fast and open-source)
+        const response = await fetch(
+            "https://huggingface.co",
+            {
+                headers: { 
+                    Authorization: `Bearer ${token}`,
+                    "Content-Type": "application/json"
+                },
+                method: "POST",
+                body: JSON.stringify({ inputs: promptText }),
+            }
+        );
+
+        if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            throw new Error(errData.error || `Server responded with status: ${response.status}`);
+        }
+
+        const blob = await response.blob();
+        const objectURL = URL.createObjectURL(blob);
+        
+        // Render generated image onto canvas panel
+        generatedImage.src = objectURL;
+        generatedImage.style.display = 'block';
+    } catch (error) {
+        console.error(error);
+        showError(`Generation Failed: ${error.message}`);
+        placeholderText.style.display = 'block';
+    } finally {
+        loadingSpinner.style.display = 'none';
+    }
+}
+
+function showError(msg) {
+    errorDisplay.textContent = msg;
+    errorDisplay.style.display = 'block';
+}
+
+generateImgBtn.addEventListener('click', generateAIImage);
