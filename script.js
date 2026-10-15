@@ -1,3 +1,5 @@
+// UPDATED: client-side script to call Cloudflare Worker proxy
+
 // REGISTER SERVICE WORKER
 if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js')
@@ -49,7 +51,7 @@ const artisticFlairs = [
 ];
 
 // INITIALIZE USER INTERFACE ELEMENTS
-const hfKeyInput = document.getElementById('hfKey');
+const hfKeyInput = document.getElementById('hfKey'); // still used to save locally, but not sent to HF from client
 const coinSelect = document.getElementById('coinSelect');
 const generateBtn = document.getElementById('generateBtn');
 const promptOutput = document.getElementById('promptOutput');
@@ -59,6 +61,9 @@ const loadingSpinner = document.getElementById('loadingSpinner');
 const placeholderText = document.getElementById('placeholderText');
 const generatedImage = document.getElementById('generatedImage');
 const errorDisplay = document.getElementById('errorDisplay');
+
+// Replace this with your deployed Cloudflare Worker URL:
+const WORKER_URL = 'https://<YOUR_WORKER_SUBDOMAIN>.workers.dev/generate';
 
 // Populate Dropdown
 Object.keys(cryptoDatabase).forEach(coin => {
@@ -107,13 +112,12 @@ copyBtn.addEventListener('click', () => {
     alert('Prompt copied successfully!');
 });
 
-// FREE LIVE IMAGE GENERATION PIPELINE (Hugging Face API)
+// FREE LIVE IMAGE GENERATION PIPELINE (via Cloudflare Worker proxy)
 async function generateAIImage() {
-    const token = hfKeyInput.value.trim();
     const promptText = promptOutput.textContent;
 
-    if (!token) {
-        showError("Please enter your Hugging Face API key first!");
+    if (!promptText || !promptText.trim()) {
+        showError("Please generate a prompt first!");
         return;
     }
 
@@ -122,38 +126,39 @@ async function generateAIImage() {
     placeholderText.style.display = 'none';
     generatedImage.style.display = 'none';
     loadingSpinner.style.display = 'block';
+    generateImgBtn.disabled = true;
 
     try {
-        // Utilizing Black Forest Labs Flux-Schnell model (Blazing fast and open-source)
-        const response = await fetch(
-            "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell",
-            {
-                headers: { 
-                    Authorization: `Bearer ${token}`,
-                    "Content-Type": "application/json"
-                },
-                method: "POST",
-                body: JSON.stringify({ inputs: promptText }),
-            }
-        );
+        // Send prompt to your Cloudflare Worker which holds the HF key securely
+        const response = await fetch(WORKER_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ prompt: promptText })
+        });
 
         if (!response.ok) {
+            // try to decode JSON error returned by worker
             const errData = await response.json().catch(() => ({}));
             throw new Error(errData.error || `Server responded with status: ${response.status}`);
         }
 
+        // Expect binary image back (worker forwards HF response)
         const blob = await response.blob();
         const objectURL = URL.createObjectURL(blob);
         
         // Render generated image onto canvas panel
         generatedImage.src = objectURL;
         generatedImage.style.display = 'block';
+        placeholderText.style.display = 'none';
     } catch (error) {
         console.error(error);
         showError(`Generation Failed: ${error.message}`);
         placeholderText.style.display = 'block';
     } finally {
         loadingSpinner.style.display = 'none';
+        generateImgBtn.disabled = false;
     }
 }
 
