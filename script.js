@@ -63,7 +63,7 @@ const generatedImage = document.getElementById('generatedImage');
 const errorDisplay = document.getElementById('errorDisplay');
 
 // Replace this with your deployed Cloudflare Worker URL:
-const WORKER_URL = 'https://hf-proxy.gikunju.workers.dev/generate';
+const WORKER_URL = 'https://hf-proxy.gikunju.workers.dev/';
 
 // Populate Dropdown
 Object.keys(cryptoDatabase).forEach(coin => {
