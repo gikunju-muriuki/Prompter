@@ -126,7 +126,7 @@ async function generateAIImage() {
     try {
         // Utilizing Black Forest Labs Flux-Schnell model (Blazing fast and open-source)
         const response = await fetch(
-            "https://huggingface.co",
+            "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell",
             {
                 headers: { 
                     Authorization: `Bearer ${token}`,
