@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>blog.god Prompt Generator</title>
+    <style>
+        :root { --bg: #0d1117; --card: #161b22; --text: #c9d1d9; --accent: #58a6ff; }
+        body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+        .container { background: var(--card); padding: 2rem; border-radius: 12px; width: 90%; max-width: 500px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+        h2 { margin-top: 0; color: #fff; }
+        label { display: block; margin: 1rem 0 0.5rem; font-weight: bold; }
+        select, button { width: 100%; padding: 0.75rem; border-radius: 6px; border: 1px solid #30363d; background: #21262d; color: #fff; font-size: 1rem; box-sizing: border-box; }
+        button { background: var(--accent); border: none; font-weight: bold; cursor: pointer; margin-top: 1.5rem; transition: background 0.2s; }
+        button:hover { background: #1f6feb; }
+        .output-box { background: #0d1117; padding: 1rem; border: 1px solid #30363d; border-radius: 6px; margin-top: 1.5rem; min-height: 100px; white-space: pre-wrap; font-size: 0.95rem; line-height: 1.5; }
+        .copy-btn { background: #238636; margin-top: 0.5rem; }
+        .copy-btn:hover { background: #2ea043; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>🚀 blog.god Prompt Engine</h2>
+    
+    <label for="coinSelect">Select Target Crypto:</label>
+    <select id="coinSelect"></select>
+
+    <button id="generateBtn">⚡ Generate Unique Prompt</button>
+    
+    <div class="output-box" id="promptOutput">Your dynamic prompt will appear here...</div>
+    <button class="copy-btn" id="copyBtn">📋 Copy to Clipboard</button>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
