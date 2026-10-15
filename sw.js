@@ -1,4 +1,4 @@
-const CACHE_NAME = 'blog-god-prompt-cache-v1';
+const CACHE_NAME = 'blog-god-prompt-cache-v2';
 let savedCryptoSelection = '';
 
 // Handle UI caching & background state preservation tasks
